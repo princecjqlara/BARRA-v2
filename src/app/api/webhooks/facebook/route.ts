@@ -41,13 +41,21 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
         }
 
-        const body: FacebookLeadgenEvent = JSON.parse(rawBody);
+        const body = JSON.parse(rawBody);
 
         // Process each entry
         for (const entry of body.entry || []) {
+            // Handle leadgen events (new leads from forms)
             for (const change of entry.changes || []) {
                 if (change.field === 'leadgen') {
                     await processLeadgenEvent(change.value);
+                }
+            }
+
+            // Handle messaging events (conversations)
+            if (entry.messaging) {
+                for (const messagingEvent of entry.messaging) {
+                    await processMessagingEvent(entry.id, messagingEvent);
                 }
             }
         }
@@ -58,6 +66,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Processing failed' }, { status: 500 });
     }
 }
+
 
 async function processLeadgenEvent(leadData: {
     form_id: string;
@@ -273,3 +282,221 @@ async function processLeadgenEvent(leadData: {
     }
 }
 
+/**
+ * Process incoming messages from Facebook Messenger
+ * Only saves messages for webhook-sourced contacts and triggers re-analysis
+ */
+async function processMessagingEvent(pageId: string, event: {
+    sender: { id: string };
+    recipient: { id: string };
+    timestamp: number;
+    message?: { mid: string; text: string };
+}) {
+    const supabase = createServerClient();
+
+    try {
+        const senderId = event.sender.id;
+        const messageText = event.message?.text;
+        const messageId = event.message?.mid;
+
+        if (!messageText) {
+            return; // No text content, skip
+        }
+
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('📨 INCOMING MESSAGE');
+
+        // Find the Facebook config for this page
+        const { data: fbConfig } = await supabase
+            .from('facebook_configs')
+            .select('*')
+            .eq('page_id', pageId)
+            .single();
+
+        if (!fbConfig) {
+            console.log('No config found for page:', pageId);
+            return;
+        }
+
+        // Find contact by sender ID (stored in custom_fields.psid or facebook_lead_id)
+        // First try to match by PSID in custom fields
+        const { data: contacts } = await supabase
+            .from('contacts')
+            .select('*')
+            .eq('user_id', fbConfig.user_id)
+            .eq('facebook_page_id', pageId);
+
+        // Find matching contact (check PSID in custom_fields)
+        const matchingContact = contacts?.find(c =>
+            c.custom_fields?.psid === senderId ||
+            c.facebook_lead_id === senderId
+        );
+
+        if (!matchingContact) {
+            console.log('⚠️ No contact found for sender:', senderId);
+            return;
+        }
+
+        // Only save messages for webhook-sourced contacts
+        if (matchingContact.source !== 'webhook') {
+            console.log('⏭️ Skipping: Contact is not from webhook (source:', matchingContact.source + ')');
+            return;
+        }
+
+        console.log('👤 Contact:', matchingContact.full_name || matchingContact.email);
+        console.log('💬 Message:', messageText.substring(0, 100) + (messageText.length > 100 ? '...' : ''));
+
+        // Save the message
+        const { error: messageError } = await supabase
+            .from('messages')
+            .insert({
+                contact_id: matchingContact.id,
+                user_id: fbConfig.user_id,
+                direction: 'inbound',
+                content: messageText,
+                platform: 'messenger',
+                facebook_message_id: messageId,
+            });
+
+        if (messageError) {
+            console.error('❌ Failed to save message:', messageError);
+        } else {
+            console.log('💾 Message saved');
+        }
+
+        // Get conversation history
+        const { data: messages } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('contact_id', matchingContact.id)
+            .order('created_at', { ascending: true })
+            .limit(20);
+
+        console.log('📚 Conversation history:', messages?.length || 0, 'messages');
+
+        // Re-analyze the contact with AI
+        console.log('🤖 Triggering AI re-analysis based on conversation...');
+
+        // Get current pipeline and stages
+        const { data: pipeline } = await supabase
+            .from('pipelines')
+            .select('*, pipeline_stages(*)')
+            .eq('user_id', fbConfig.user_id)
+            .eq('is_default', true)
+            .single();
+
+        if (pipeline && pipeline.pipeline_stages?.length) {
+            const stages = (pipeline.pipeline_stages as PipelineStage[]).sort(
+                (a, b) => a.order_index - b.order_index
+            );
+
+            // Build conversation context
+            const conversationContext = (messages || [])
+                .map((m: { direction: string; content: string }) =>
+                    `[${m.direction === 'inbound' ? 'CUSTOMER' : 'BOT'}]: ${m.content}`
+                )
+                .join('\n');
+
+            // Re-analyze contact
+            const analysisResult = await analyzeContact(matchingContact as Contact, messages || []);
+
+            // Determine if conversation indicates stage change
+            const latestMessage = messageText.toLowerCase();
+            let shouldMoveStage = false;
+            let newUrgency = analysisResult.analysis.urgency;
+
+            // Simple keyword detection for stage changes
+            if (latestMessage.includes('buy') || latestMessage.includes('purchase') || latestMessage.includes('order')) {
+                shouldMoveStage = true;
+                newUrgency = 'high';
+            } else if (latestMessage.includes('not interested') || latestMessage.includes('cancel')) {
+                shouldMoveStage = true;
+                newUrgency = 'low';
+            } else if (latestMessage.includes('price') || latestMessage.includes('quote') || latestMessage.includes('cost')) {
+                shouldMoveStage = true;
+                newUrgency = 'medium';
+            }
+
+            // Update contact analysis
+            await supabase
+                .from('contacts')
+                .update({
+                    ai_analysis: {
+                        ...analysisResult.analysis,
+                        urgency: newUrgency,
+                        last_message_at: new Date().toISOString(),
+                        message_count: messages?.length || 0,
+                    },
+                })
+                .eq('id', matchingContact.id);
+
+            if (shouldMoveStage) {
+                console.log('🔄 Conversation indicates potential stage change');
+
+                // Get AI suggestion for new stage
+                const stageResult = await assignContactToStage(
+                    { ...matchingContact, ai_analysis: { ...analysisResult.analysis, urgency: newUrgency } } as Contact,
+                    messages || [],
+                    stages
+                );
+
+                const newStage = stages.find(s => s.id === stageResult.suggestion.recommended_stage_id);
+
+                // Get current stage
+                const { data: currentAssignment } = await supabase
+                    .from('contact_stage_assignments')
+                    .select('stage_id')
+                    .eq('contact_id', matchingContact.id)
+                    .single();
+
+                if (newStage && newStage.id !== currentAssignment?.stage_id) {
+                    const oldStage = stages.find(s => s.id === currentAssignment?.stage_id);
+                    console.log('📍 MOVING:', oldStage?.name || 'None', '→', newStage.name);
+
+                    await supabase
+                        .from('contact_stage_assignments')
+                        .upsert({
+                            contact_id: matchingContact.id,
+                            stage_id: newStage.id,
+                            pipeline_id: pipeline.id,
+                            assigned_by: 'ai',
+                            notes: `Moved based on message: "${messageText.substring(0, 50)}..."`,
+                        }, {
+                            onConflict: 'contact_id,pipeline_id',
+                        });
+
+                    // Send CAPI event if configured
+                    if (newStage.capi_event_name && fbConfig.dataset_id) {
+                        console.log('📤 Sending CAPI event:', newStage.capi_event_name);
+                        try {
+                            await sendConversionEvent(
+                                fbConfig.dataset_id,
+                                fbConfig.page_access_token,
+                                newStage.capi_event_name,
+                                {
+                                    email: matchingContact.email,
+                                    phone: matchingContact.phone,
+                                    firstName: matchingContact.first_name,
+                                    lastName: matchingContact.last_name,
+                                    externalId: matchingContact.id,
+                                },
+                                {
+                                    pipeline_stage: newStage.name,
+                                    trigger: 'conversation',
+                                }
+                            );
+                            console.log('✅ CAPI event sent');
+                        } catch (err) {
+                            console.error('❌ CAPI event failed:', err);
+                        }
+                    }
+                }
+            }
+        }
+
+        console.log('✅ Message processing complete');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } catch (error) {
+        console.error('❌ Error processing message:', error);
+    }
+}
