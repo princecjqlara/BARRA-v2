@@ -14,21 +14,19 @@ import { getCampaignInsights, getAdAccountInsights, getLeadCount, getCostPerLead
  * Recommended schedule: Every 15-30 minutes
  */
 export async function GET(request: NextRequest) {
-    // Verify cron secret
+    // Verify cron secret (optional - if not set, endpoint is open)
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
 
-    if (!cronSecret) {
-        console.log('⚠️ CRON_SECRET not configured');
-        return NextResponse.json({
-            error: 'Cron not configured',
-            message: 'Set CRON_SECRET in environment variables'
-        }, { status: 500 });
-    }
-
-    if (authHeader !== `Bearer ${cronSecret}`) {
+    // If CRON_SECRET is configured, require it
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
         console.log('❌ Invalid cron authorization');
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Warn if no secret is configured (but still allow)
+    if (!cronSecret) {
+        console.log('⚠️ CRON_SECRET not set - endpoint is unprotected!');
     }
 
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
