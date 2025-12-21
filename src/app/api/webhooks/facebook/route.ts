@@ -123,10 +123,33 @@ async function processLeadgenEvent(leadData: {
 
         console.log('Contact created:', contact.id);
 
-        // Analyze the contact with AI
+        // ========================================
+        // STEP 1: AI ANALYSIS
+        // ========================================
+        console.log('🤖 Starting AI analysis for:', contact.full_name || contact.email);
+
         const analysisResult = await analyzeContact(contact as Contact, []);
 
-        // Update contact with analysis
+        // Calculate lead quality score (0-100)
+        let leadQualityScore = 0;
+
+        // Contact completeness (max 30 points)
+        if (contact.email) leadQualityScore += 10;
+        if (contact.phone) leadQualityScore += 10;
+        if (contact.full_name) leadQualityScore += 10;
+
+        // AI urgency score (max 40 points)
+        switch (analysisResult.analysis.urgency) {
+            case 'high': leadQualityScore += 40; break;
+            case 'medium': leadQualityScore += 25; break;
+            case 'low': leadQualityScore += 10; break;
+        }
+
+        // Custom fields richness (max 30 points)
+        const customFieldCount = Object.keys(parsed.customFields || {}).length;
+        leadQualityScore += Math.min(30, customFieldCount * 10);
+
+        // Update contact with analysis AND quality score
         await supabase
             .from('contacts')
             .update({
@@ -134,8 +157,11 @@ async function processLeadgenEvent(leadData: {
                     ...analysisResult.analysis,
                     analyzed_at: new Date().toISOString(),
                 },
+                lead_quality_score: Math.min(100, leadQualityScore),
             })
             .eq('id', contact.id);
+
+        console.log('✅ AI Analysis complete. Quality Score:', leadQualityScore);
 
         // Log the AI analysis
         await supabase
@@ -146,9 +172,13 @@ async function processLeadgenEvent(leadData: {
                 action_type: 'analyze_contact',
                 model_used: 'meta/llama-3.1-8b-instruct',
                 input_summary: `Analyzed new lead: ${contact.full_name || contact.email}`,
-                output_summary: analysisResult.analysis.summary,
+                output_summary: `Urgency: ${analysisResult.analysis.urgency}, Quality: ${leadQualityScore}. ${analysisResult.analysis.summary}`,
                 tokens_used: analysisResult.tokensUsed,
             });
+
+        // ========================================
+        // STEP 2: AUTO-ASSIGN TO PIPELINE STAGE
+        // ========================================
 
         // Get user's default pipeline and stages
         const { data: pipeline } = await supabase
@@ -159,17 +189,25 @@ async function processLeadgenEvent(leadData: {
             .single();
 
         if (pipeline && pipeline.pipeline_stages?.length > 0) {
+            console.log('📊 Found default pipeline:', pipeline.name);
+
             // Sort stages by order_index
             const stages = (pipeline.pipeline_stages as PipelineStage[]).sort(
                 (a, b) => a.order_index - b.order_index
             );
+            console.log('📋 Available stages:', stages.map(s => s.name).join(' → '));
 
             // Get AI suggestion for stage assignment
+            console.log('🤖 Asking AI to determine best stage...');
             const stageResult = await assignContactToStage(
                 { ...contact, ai_analysis: analysisResult.analysis } as Contact,
                 [],
                 stages
             );
+
+            const assignedStage = stages.find(s => s.id === stageResult.suggestion.recommended_stage_id);
+            console.log('✅ AI DECISION: Move to stage "' + assignedStage?.name + '"');
+            console.log('💭 Reasoning:', stageResult.suggestion.reasoning);
 
             // Assign contact to stage
             await supabase
@@ -182,6 +220,8 @@ async function processLeadgenEvent(leadData: {
                     notes: stageResult.suggestion.reasoning,
                 });
 
+            console.log('📍 Contact assigned to stage:', assignedStage?.name);
+
             // Log the stage assignment
             await supabase
                 .from('ai_analysis_logs')
@@ -190,14 +230,16 @@ async function processLeadgenEvent(leadData: {
                     contact_id: contact.id,
                     action_type: 'assign_stage',
                     model_used: 'meta/llama-3.1-8b-instruct',
-                    input_summary: `Assigned to pipeline: ${pipeline.name}`,
-                    output_summary: `Stage: ${stages.find(s => s.id === stageResult.suggestion.recommended_stage_id)?.name}`,
+                    input_summary: `Auto-assigned to pipeline: ${pipeline.name}`,
+                    output_summary: `Stage: ${assignedStage?.name}. Reason: ${stageResult.suggestion.reasoning}`,
                     tokens_used: stageResult.tokensUsed,
                 });
 
-            // Send CAPI event if the stage has one configured
-            const assignedStage = stages.find(s => s.id === stageResult.suggestion.recommended_stage_id);
+            // ========================================
+            // STEP 3: SEND CAPI EVENT (if configured)
+            // ========================================
             if (assignedStage?.capi_event_name && fbConfig.dataset_id) {
+                console.log('📤 Sending CAPI event:', assignedStage.capi_event_name);
                 try {
                     await sendConversionEvent(
                         fbConfig.dataset_id,
@@ -215,15 +257,19 @@ async function processLeadgenEvent(leadData: {
                             source: 'lead_pipeline',
                         }
                     );
-                    console.log('CAPI event sent:', assignedStage.capi_event_name);
+                    console.log('✅ CAPI event sent successfully:', assignedStage.capi_event_name);
                 } catch (capiError) {
-                    console.error('Failed to send CAPI event:', capiError);
+                    console.error('❌ Failed to send CAPI event:', capiError);
                 }
             }
+        } else {
+            console.log('⚠️ No default pipeline found. Contact not assigned to any stage.');
         }
 
-        console.log('Lead processed successfully:', leadData.leadgen_id);
+        console.log('🎉 Lead processing complete:', contact.full_name || contact.email);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     } catch (error) {
-        console.error('Error processing leadgen event:', error);
+        console.error('❌ Error processing leadgen event:', error);
     }
 }
+
