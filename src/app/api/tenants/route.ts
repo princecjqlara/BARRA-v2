@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+// Only this admin email can manage tenants
+const ADMIN_EMAIL = 'cjlara032107@gmail.com';
+
 interface Tenant {
     id: string;
     user_id: string;
@@ -14,6 +17,11 @@ interface Tenant {
     settings: Record<string, unknown>;
     created_at: string;
     updated_at: string;
+}
+
+// Check if user is admin
+function isAdmin(email: string | undefined): boolean {
+    return email === ADMIN_EMAIL;
 }
 
 /**
@@ -83,6 +91,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Only admin can create tenants
+    if (!isAdmin(user.email)) {
+        return NextResponse.json({ error: 'Only admin can manage tenants' }, { status: 403 });
+    }
+
     try {
         const body = await request.json();
         const { name, description, contact_name, contact_email, contact_phone, logo_url } = body;
@@ -135,6 +148,11 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Only admin can update tenants
+    if (!isAdmin(user.email)) {
+        return NextResponse.json({ error: 'Only admin can manage tenants' }, { status: 403 });
+    }
+
     try {
         const body = await request.json();
         const { id, name, description, contact_name, contact_email, contact_phone, logo_url, is_active } = body;
@@ -185,6 +203,11 @@ export async function DELETE(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Only admin can delete tenants
+    if (!isAdmin(user.email)) {
+        return NextResponse.json({ error: 'Only admin can manage tenants' }, { status: 403 });
     }
 
     try {
