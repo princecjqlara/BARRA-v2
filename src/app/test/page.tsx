@@ -168,14 +168,15 @@ export default function TestPage() {
                 <Link href="/pipelines" className="btn-secondary">Pipelines</Link>
                 <Link href="/contacts" className="btn-secondary">Contacts</Link>
                 <Link href="/ads" className="btn-secondary">Ads</Link>
+                <Link href="/tenants" className="btn-secondary">Tenants</Link>
                 <Link href="/settings" className="btn-secondary">Settings</Link>
                 <Link href="/test" className="btn-primary">Test Mode</Link>
             </nav>
 
             {/* Overall Status */}
             <div className={`glass-card p-6 mb-8 border-2 ${overallStatus === 'ok' ? 'border-green-500/50' :
-                    overallStatus === 'warning' ? 'border-yellow-500/50' :
-                        'border-red-500/50'
+                overallStatus === 'warning' ? 'border-yellow-500/50' :
+                    'border-red-500/50'
                 }`}>
                 <div className="flex items-center gap-4">
                     <span className="text-4xl">

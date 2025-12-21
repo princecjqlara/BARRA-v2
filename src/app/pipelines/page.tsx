@@ -207,6 +207,9 @@ function PipelinesContent() {
                 <Link href="/ads" className="btn-secondary">
                     Ads
                 </Link>
+                <Link href="/tenants" className="btn-secondary">
+                    Tenants
+                </Link>
                 <Link href="/settings" className="btn-secondary">
                     Settings
                 </Link>

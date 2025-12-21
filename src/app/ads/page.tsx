@@ -158,6 +158,7 @@ export default function AdsPage() {
                 <Link href="/pipelines" className="btn-secondary">Pipelines</Link>
                 <Link href="/contacts" className="btn-secondary">Contacts</Link>
                 <Link href="/ads" className="btn-primary">Ads</Link>
+                <Link href="/tenants" className="btn-secondary">Tenants</Link>
                 <Link href="/settings" className="btn-secondary">Settings</Link>
             </nav>
 
@@ -290,10 +291,10 @@ export default function AdsPage() {
                                             </td>
                                             <td className="p-4">
                                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${campaign.status === 'ACTIVE'
-                                                        ? 'bg-green-500/20 text-green-400'
-                                                        : campaign.status === 'PAUSED'
-                                                            ? 'bg-yellow-500/20 text-yellow-400'
-                                                            : 'bg-slate-500/20 text-slate-400'
+                                                    ? 'bg-green-500/20 text-green-400'
+                                                    : campaign.status === 'PAUSED'
+                                                        ? 'bg-yellow-500/20 text-yellow-400'
+                                                        : 'bg-slate-500/20 text-slate-400'
                                                     }`}>
                                                     {campaign.status}
                                                 </span>
