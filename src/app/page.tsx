@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface DashboardStats {
   totalContacts: number;
@@ -22,6 +23,7 @@ interface RecentContact {
 }
 
 export default function Dashboard() {
+  const router = useRouter();
   const [stats, setStats] = useState<DashboardStats>({
     totalContacts: 0,
     newLeadsToday: 0,
@@ -30,10 +32,32 @@ export default function Dashboard() {
   });
   const [recentContacts, setRecentContacts] = useState<RecentContact[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   useEffect(() => {
-    loadDashboardData();
+    checkAuthAndLoad();
   }, []);
+
+  async function checkAuthAndLoad() {
+    try {
+      // Check if user is authenticated
+      const authRes = await fetch('/api/auth/me');
+      const authData = await authRes.json();
+
+      if (!authData.authenticated) {
+        // Redirect to login if not authenticated
+        router.push('/login');
+        return;
+      }
+
+      setIsAuthenticated(true);
+      loadDashboardData();
+    } catch (err) {
+      console.error('Auth check failed:', err);
+      router.push('/login');
+    }
+  }
+
 
   async function loadDashboardData() {
     try {
@@ -62,12 +86,17 @@ export default function Dashboard() {
     }
   }
 
-  if (loading) {
+  if (loading || isAuthenticated === null) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="spinner" />
       </div>
     );
+  }
+
+  // If somehow not authenticated after loading, redirect
+  if (!isAuthenticated) {
+    return null;
   }
 
   return (
