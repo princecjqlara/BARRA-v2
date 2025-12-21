@@ -23,6 +23,7 @@ interface Tenant {
 export default function TenantsPage() {
     const [tenants, setTenants] = useState<Tenant[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
     const [showModal, setShowModal] = useState(false);
     const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
     const [formData, setFormData] = useState({
@@ -36,8 +37,26 @@ export default function TenantsPage() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        loadTenants();
+        checkAdmin();
     }, []);
+
+    async function checkAdmin() {
+        try {
+            const res = await fetch('/api/auth/me');
+            const data = await res.json();
+            setIsAdmin(data.isAdmin);
+
+            if (data.isAdmin) {
+                loadTenants();
+            } else {
+                setLoading(false);
+            }
+        } catch (err) {
+            console.error('Failed to check admin status:', err);
+            setIsAdmin(false);
+            setLoading(false);
+        }
+    }
 
     async function loadTenants() {
         try {
@@ -175,6 +194,39 @@ export default function TenantsPage() {
         );
     }
 
+    // Access denied for non-admins
+    if (!isAdmin) {
+        return (
+            <div className="min-h-screen p-8">
+                <header className="mb-8">
+                    <h1 className="text-4xl font-bold gradient-text mb-2">
+                        Access Denied
+                    </h1>
+                </header>
+
+                <nav className="flex gap-4 mb-8">
+                    <Link href="/" className="btn-secondary">Dashboard</Link>
+                    <Link href="/pipelines" className="btn-secondary">Pipelines</Link>
+                    <Link href="/contacts" className="btn-secondary">Contacts</Link>
+                    <Link href="/ads" className="btn-secondary">Ads</Link>
+                    <Link href="/settings" className="btn-secondary">Settings</Link>
+                </nav>
+
+                <div className="glass-card p-12 text-center max-w-lg mx-auto">
+                    <div className="text-6xl mb-4">🔒</div>
+                    <h2 className="text-2xl font-bold mb-4">Admin Access Required</h2>
+                    <p className="text-slate-400 mb-6">
+                        Only administrators can access the Tenants management page.
+                        Please contact your administrator if you need access.
+                    </p>
+                    <Link href="/" className="btn-primary">
+                        Go to Dashboard
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen p-8">
             {/* Header */}
@@ -240,8 +292,8 @@ export default function TenantsPage() {
                                     )}
                                 </div>
                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${tenant.is_active
-                                        ? 'bg-green-500/20 text-green-400'
-                                        : 'bg-slate-500/20 text-slate-400'
+                                    ? 'bg-green-500/20 text-green-400'
+                                    : 'bg-slate-500/20 text-slate-400'
                                     }`}>
                                     {tenant.is_active ? 'Active' : 'Inactive'}
                                 </span>
