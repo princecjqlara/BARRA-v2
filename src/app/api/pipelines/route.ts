@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClient, createServerClientWithCookies } from '@/lib/supabase/client';
 
 // GET /api/pipelines - List pipelines
 export async function GET() {
+    const authClient = await createServerClientWithCookies();
     const supabase = createServerClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -37,9 +38,10 @@ export async function GET() {
 
 // POST /api/pipelines - Create pipeline
 export async function POST(request: NextRequest) {
+    const authClient = await createServerClientWithCookies();
     const supabase = createServerClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

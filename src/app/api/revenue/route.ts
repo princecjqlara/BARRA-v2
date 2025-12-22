@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClient, createServerClientWithCookies } from '@/lib/supabase/client';
 import { sendConversionEvent } from '@/lib/services/facebookService';
 
 /**
@@ -7,9 +7,10 @@ import { sendConversionEvent } from '@/lib/services/facebookService';
  * This tracks actual revenue and sends conversion event to Facebook CAPI
  */
 export async function POST(request: NextRequest) {
+    const authClient = await createServerClientWithCookies();
     const supabase = createServerClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -154,9 +155,10 @@ export async function POST(request: NextRequest) {
  * GET /api/revenue - Get revenue summary
  */
 export async function GET(request: NextRequest) {
+    const authClient = await createServerClientWithCookies();
     const supabase = createServerClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

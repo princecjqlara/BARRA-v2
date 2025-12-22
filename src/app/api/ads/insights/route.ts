@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClient, createServerClientWithCookies } from '@/lib/supabase/client';
 import {
     getCampaignInsights,
     getAdAccountInsights,
@@ -9,9 +9,10 @@ import {
 
 // GET /api/ads/insights - Get ad insights for the user
 export async function GET(request: NextRequest) {
+    const authClient = await createServerClientWithCookies();
     const supabase = createServerClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -119,9 +120,10 @@ export async function GET(request: NextRequest) {
 
 // POST /api/ads/insights - Force refresh ad insights
 export async function POST(request: NextRequest) {
+    const authClient = await createServerClientWithCookies();
     const supabase = createServerClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
