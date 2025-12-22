@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClient, createServerClientWithCookies } from '@/lib/supabase/client';
 
 // Only this admin email can manage tenants
 const ADMIN_EMAIL = 'cjlara032107@gmail.com';
@@ -25,22 +25,29 @@ function isAdmin(email: string | undefined): boolean {
 }
 
 /**
- * GET /api/tenants - List all tenants for the user
+ * GET /api/tenants - List all tenants (admin sees all, owned by admin)
  */
 export async function GET() {
+    // Use cookie-aware client for auth
+    const authClient = await createServerClientWithCookies();
+    // Use service role client for data operations
     const supabase = createServerClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Only admin can see tenants
+    if (!isAdmin(user.email)) {
+        return NextResponse.json({ error: 'Only admin can view tenants' }, { status: 403 });
+    }
+
     try {
-        // Get tenants with stats
+        // Get ALL tenants (admin sees everything)
         const { data: tenants, error } = await supabase
             .from('tenants')
             .select('*')
-            .eq('user_id', user.id)
             .order('name', { ascending: true });
 
         if (error) {
@@ -84,9 +91,12 @@ export async function GET() {
  * POST /api/tenants - Create a new tenant with their own auth account
  */
 export async function POST(request: NextRequest) {
+    // Use cookie-aware client for auth
+    const authClient = await createServerClientWithCookies();
+    // Use service role client for admin operations
     const supabase = createServerClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -180,9 +190,12 @@ export async function POST(request: NextRequest) {
  * PUT /api/tenants - Update a tenant
  */
 export async function PUT(request: NextRequest) {
+    // Use cookie-aware client for auth
+    const authClient = await createServerClientWithCookies();
+    // Use service role client for data operations
     const supabase = createServerClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -213,7 +226,6 @@ export async function PUT(request: NextRequest) {
                 is_active,
             })
             .eq('id', id)
-            .eq('user_id', user.id)
             .select()
             .single();
 
@@ -237,9 +249,12 @@ export async function PUT(request: NextRequest) {
  * DELETE /api/tenants - Delete a tenant
  */
 export async function DELETE(request: NextRequest) {
+    // Use cookie-aware client for auth
+    const authClient = await createServerClientWithCookies();
+    // Use service role client for data operations
     const supabase = createServerClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -257,20 +272,23 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: 'Tenant ID is required' }, { status: 400 });
         }
 
-        // Get tenant name before deleting
+        // Get tenant info before deleting
         const { data: tenant } = await supabase
             .from('tenants')
-            .select('name')
+            .select('name, user_id')
             .eq('id', id)
-            .eq('user_id', user.id)
             .single();
+
+        // Delete the tenant's auth user if exists
+        if (tenant?.user_id) {
+            await supabase.auth.admin.deleteUser(tenant.user_id);
+        }
 
         // Delete tenant
         const { error } = await supabase
             .from('tenants')
             .delete()
-            .eq('id', id)
-            .eq('user_id', user.id);
+            .eq('id', id);
 
         if (error) {
             console.error('Failed to delete tenant:', error);
