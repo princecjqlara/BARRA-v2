@@ -4,7 +4,7 @@ import { createServerClient, createServerClientWithCookies } from '@/lib/supabas
 // DELETE /api/facebook-config/[id] - Delete a Facebook configuration
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     const authClient = await createServerClientWithCookies();
     const supabase = createServerClient();
@@ -14,7 +14,7 @@ export async function DELETE(
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const configId = params.id;
+    const { id: configId } = await params;
 
     if (!configId) {
         return NextResponse.json({ error: 'Config ID is required' }, { status: 400 });
