@@ -2,7 +2,7 @@ import CryptoJS from 'crypto-js';
 import { v4 as uuidv4 } from 'uuid';
 import type { FacebookLeadData, CAPIEvent, CAPIResponse } from '@/lib/types';
 
-const GRAPH_API_VERSION = 'v22.0';
+const GRAPH_API_VERSION = 'v24.0';
 const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 
 /**
