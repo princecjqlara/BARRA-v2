@@ -37,35 +37,33 @@ export async function GET(request: NextRequest) {
         const redirectUri = `${appUrl}/api/auth/facebook/callback`;
 
         // Exchange code for short-lived token
+        console.log('Exchanging code for token...');
         const tokenResponse = await exchangeCodeForToken(code, redirectUri);
 
         // Get long-lived token
+        console.log('Getting long-lived token...');
         const longLivedToken = await getLongLivedToken(tokenResponse.access_token);
 
         // Get user's pages
+        console.log('Fetching user pages...');
         const pages = await getUserPages(longLivedToken);
+        console.log(`Found ${pages.length} pages:`, pages.map(p => p.name));
 
         if (pages.length === 0) {
             return NextResponse.redirect(`${appUrl}/settings?error=no_pages`);
         }
 
-        // Get ad accounts for dataset creation
+        // Get ALL ad accounts (personal + Business Manager)
+        console.log('Fetching ad accounts...');
         let adAccounts: { id: string; name: string; account_id: string }[] = [];
         try {
             adAccounts = await getAdAccounts(longLivedToken);
-            console.log('Ad accounts found:', JSON.stringify(adAccounts));
+            console.log(`Found ${adAccounts.length} ad accounts:`, adAccounts.map(a => ({ id: a.id, name: a.name })));
         } catch (adError) {
             console.error('Failed to get ad accounts:', adError);
         }
 
-        console.log('Pages found:', JSON.stringify(pages.map(p => ({ id: p.id, name: p.name }))));
-
-        // Store pages data in session/cookie for user to select
-        // For now, we'll auto-select the first page and ad account
-        const selectedPage = pages[0];
-        const selectedAdAccount = adAccounts[0] || null;
-
-        // Get the current user from Supabase auth - use cookie-aware client
+        // Get the current user from Supabase auth
         const authClient = await createServerClientWithCookies();
         const supabase = createServerClient();
 
@@ -73,6 +71,7 @@ export async function GET(request: NextRequest) {
 
         if (userError || !user) {
             // Store in session for after login
+            console.log('User not logged in, storing pending connection...');
             const response = NextResponse.redirect(`${appUrl}/login?callback=facebook_connect`);
             response.cookies.set('fb_pending_connection', JSON.stringify({
                 pages,
@@ -87,22 +86,25 @@ export async function GET(request: NextRequest) {
             return response;
         }
 
+        console.log(`Saving Facebook config for user ${user.id}...`);
+
         // Create or update Facebook config for each page
         for (const page of pages) {
+            // Find the best ad account for this page (first one found)
+            const adAccountForPage = adAccounts[0] || null;
+
             // Try to create a dataset for CAPI
             let datasetId: string | null = null;
-            if (selectedAdAccount) {
+            if (adAccountForPage) {
                 try {
                     datasetId = await createDataset(
-                        selectedAdAccount.account_id,
+                        adAccountForPage.account_id,
                         longLivedToken,
                         `Lead Pipeline - ${page.name}`
                     );
                     console.log('Created dataset:', datasetId);
                 } catch (datasetError) {
                     console.error('Failed to create dataset (may already exist):', datasetError);
-                    // Try to get existing datasets
-                    // For now, we'll continue without dataset
                 }
             }
 
@@ -110,33 +112,45 @@ export async function GET(request: NextRequest) {
             let webhookSubscribed = false;
             try {
                 webhookSubscribed = await subscribeToLeadgen(page.id, page.access_token);
-                console.log('Webhook subscription:', webhookSubscribed);
+                console.log('Webhook subscription for', page.name, ':', webhookSubscribed);
             } catch (webhookError) {
                 console.error('Failed to subscribe to webhook:', webhookError);
             }
 
-            // Upsert Facebook config
+            // Upsert Facebook config with ad account
+            const configData = {
+                user_id: user.id,
+                page_id: page.id,
+                page_name: page.name,
+                page_access_token: page.access_token,
+                ad_account_id: adAccountForPage?.account_id || null,
+                dataset_id: datasetId,
+                webhook_subscribed: webhookSubscribed,
+            };
+
+            console.log(`Saving config for page ${page.name}:`, {
+                ad_account_id: configData.ad_account_id,
+                webhook_subscribed: configData.webhook_subscribed,
+            });
+
             const { error: upsertError } = await supabase
                 .from('facebook_configs')
-                .upsert({
-                    user_id: user.id,
-                    page_id: page.id,
-                    page_name: page.name,
-                    page_access_token: page.access_token,
-                    ad_account_id: selectedAdAccount?.account_id || null,
-                    dataset_id: datasetId,
-                    webhook_subscribed: webhookSubscribed,
-                }, {
+                .upsert(configData, {
                     onConflict: 'user_id,page_id',
                 });
 
             if (upsertError) {
                 console.error('Failed to save Facebook config:', upsertError);
+            } else {
+                console.log(`Successfully saved config for page ${page.name}`);
             }
         }
 
-        // Clear the state cookie
-        const response = NextResponse.redirect(`${appUrl}/settings?success=facebook_connected`);
+        // Clear the state cookie and redirect with success
+        const adAccountMessage = adAccounts.length > 0
+            ? `&ad_accounts=${adAccounts.length}`
+            : '';
+        const response = NextResponse.redirect(`${appUrl}/settings?success=facebook_connected${adAccountMessage}`);
         response.cookies.delete('fb_oauth_state');
 
         return response;
@@ -145,3 +159,4 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${appUrl}/settings?error=oauth_failed`);
     }
 }
+
