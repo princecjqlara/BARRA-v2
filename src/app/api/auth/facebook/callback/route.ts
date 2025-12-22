@@ -50,12 +50,20 @@ export async function GET(request: NextRequest) {
         }
 
         // Get ad accounts for dataset creation
-        const adAccounts = await getAdAccounts(longLivedToken);
+        let adAccounts: { id: string; name: string; account_id: string }[] = [];
+        try {
+            adAccounts = await getAdAccounts(longLivedToken);
+            console.log('Ad accounts found:', JSON.stringify(adAccounts));
+        } catch (adError) {
+            console.error('Failed to get ad accounts:', adError);
+        }
+
+        console.log('Pages found:', JSON.stringify(pages.map(p => ({ id: p.id, name: p.name }))));
 
         // Store pages data in session/cookie for user to select
         // For now, we'll auto-select the first page and ad account
         const selectedPage = pages[0];
-        const selectedAdAccount = adAccounts[0];
+        const selectedAdAccount = adAccounts[0] || null;
 
         // Get the current user from Supabase auth - use cookie-aware client
         const authClient = await createServerClientWithCookies();
