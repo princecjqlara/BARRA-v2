@@ -32,6 +32,8 @@ export default function TenantsPage() {
         contact_name: '',
         contact_email: '',
         contact_phone: '',
+        login_email: '',
+        login_password: '',
     });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -82,6 +84,8 @@ export default function TenantsPage() {
             contact_name: '',
             contact_email: '',
             contact_phone: '',
+            login_email: '',
+            login_password: '',
         });
         setShowModal(true);
     }
@@ -94,6 +98,8 @@ export default function TenantsPage() {
             contact_name: tenant.contact_name || '',
             contact_email: tenant.contact_email || '',
             contact_phone: tenant.contact_phone || '',
+            login_email: '',
+            login_password: '',
         });
         setShowModal(true);
     }
@@ -102,6 +108,18 @@ export default function TenantsPage() {
         if (!formData.name.trim()) {
             setError('Tenant name is required');
             return;
+        }
+
+        // Require email and password for new tenants
+        if (!editingTenant) {
+            if (!formData.login_email.trim()) {
+                setError('Login email is required for new tenants');
+                return;
+            }
+            if (!formData.login_password || formData.login_password.length < 6) {
+                setError('Password must be at least 6 characters');
+                return;
+            }
         }
 
         setSaving(true);
@@ -390,6 +408,35 @@ export default function TenantsPage() {
                                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                 />
                             </div>
+
+                            {/* Login Credentials - only for new tenants */}
+                            {!editingTenant && (
+                                <div className="border-t border-slate-700 pt-4">
+                                    <h3 className="text-sm font-medium mb-3 text-slate-400">Login Credentials *</h3>
+                                    <p className="text-xs text-slate-500 mb-3">
+                                        Create login credentials for this tenant
+                                    </p>
+                                    <div className="space-y-3">
+                                        <input
+                                            type="email"
+                                            className="input-field w-full"
+                                            placeholder="Login Email *"
+                                            value={formData.login_email}
+                                            onChange={(e) => setFormData({ ...formData, login_email: e.target.value })}
+                                            required
+                                        />
+                                        <input
+                                            type="password"
+                                            className="input-field w-full"
+                                            placeholder="Password (min 6 characters) *"
+                                            value={formData.login_password}
+                                            onChange={(e) => setFormData({ ...formData, login_password: e.target.value })}
+                                            minLength={6}
+                                            required
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="border-t border-slate-700 pt-4">
                                 <h3 className="text-sm font-medium mb-3 text-slate-400">Contact Information</h3>

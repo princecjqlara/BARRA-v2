@@ -81,7 +81,7 @@ export async function GET() {
 }
 
 /**
- * POST /api/tenants - Create a new tenant
+ * POST /api/tenants - Create a new tenant with their own auth account
  */
 export async function POST(request: NextRequest) {
     const supabase = createServerClient();
@@ -98,21 +98,58 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const { name, description, contact_name, contact_email, contact_phone, logo_url } = body;
+        const {
+            name,
+            description,
+            contact_name,
+            contact_email,
+            contact_phone,
+            logo_url,
+            login_email,
+            login_password
+        } = body;
 
         if (!name || name.trim().length === 0) {
             return NextResponse.json({ error: 'Tenant name is required' }, { status: 400 });
         }
 
-        // Create tenant
-        const { data: tenant, error } = await supabase
+        if (!login_email || login_email.trim().length === 0) {
+            return NextResponse.json({ error: 'Login email is required' }, { status: 400 });
+        }
+
+        if (!login_password || login_password.length < 6) {
+            return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
+        }
+
+        // Step 1: Create auth user for the tenant using admin API
+        const { data: newUser, error: createUserError } = await supabase.auth.admin.createUser({
+            email: login_email.trim(),
+            password: login_password,
+            email_confirm: true, // Auto-confirm the email
+        });
+
+        if (createUserError) {
+            console.error('Failed to create auth user:', createUserError);
+            // Check for duplicate email
+            if (createUserError.message.includes('already') || createUserError.message.includes('exists')) {
+                return NextResponse.json({ error: 'A user with this email already exists' }, { status: 400 });
+            }
+            return NextResponse.json({ error: `Failed to create user: ${createUserError.message}` }, { status: 500 });
+        }
+
+        if (!newUser.user) {
+            return NextResponse.json({ error: 'Failed to create user account' }, { status: 500 });
+        }
+
+        // Step 2: Create tenant linked to the new user
+        const { data: tenant, error: tenantError } = await supabase
             .from('tenants')
             .insert({
-                user_id: user.id,
+                user_id: newUser.user.id, // Link to the new user, not the admin
                 name: name.trim(),
                 description,
                 contact_name,
-                contact_email,
+                contact_email: contact_email || login_email, // Use login email as contact if not provided
                 contact_phone,
                 logo_url,
                 is_active: true,
@@ -121,15 +158,17 @@ export async function POST(request: NextRequest) {
             .select()
             .single();
 
-        if (error) {
-            console.error('Failed to create tenant:', error);
+        if (tenantError) {
+            console.error('Failed to create tenant:', tenantError);
+            // Clean up: delete the auth user we just created
+            await supabase.auth.admin.deleteUser(newUser.user.id);
             return NextResponse.json({ error: 'Failed to create tenant' }, { status: 500 });
         }
 
         return NextResponse.json({
             success: true,
             tenant,
-            message: `Tenant "${name}" created successfully`,
+            message: `Tenant "${name}" created successfully. They can now log in with ${login_email}`,
         });
     } catch (error) {
         console.error('Failed to create tenant:', error);
