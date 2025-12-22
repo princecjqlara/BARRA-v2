@@ -90,23 +90,8 @@ export async function GET(request: NextRequest) {
 
         // Create or update Facebook config for each page
         for (const page of pages) {
-            // Find the best ad account for this page (first one found)
-            const adAccountForPage = adAccounts[0] || null;
-
-            // Try to create a dataset for CAPI
-            let datasetId: string | null = null;
-            if (adAccountForPage) {
-                try {
-                    datasetId = await createDataset(
-                        adAccountForPage.account_id,
-                        longLivedToken,
-                        `Lead Pipeline - ${page.name}`
-                    );
-                    console.log('Created dataset:', datasetId);
-                } catch (datasetError) {
-                    console.error('Failed to create dataset (may already exist):', datasetError);
-                }
-            }
+            // Don't auto-assign ad account or dataset - let user configure in Settings
+            // This prevents all pages from getting the same ad account
 
             // Subscribe to leadgen webhook
             let webhookSubscribed = false;
@@ -117,14 +102,14 @@ export async function GET(request: NextRequest) {
                 console.error('Failed to subscribe to webhook:', webhookError);
             }
 
-            // Upsert Facebook config with ad account
+            // Upsert Facebook config (without ad account - user sets this in Settings)
             const configData = {
                 user_id: user.id,
                 page_id: page.id,
                 page_name: page.name,
                 page_access_token: page.access_token,
-                ad_account_id: adAccountForPage?.account_id || null,
-                dataset_id: datasetId,
+                ad_account_id: null,  // User configures per-page in Settings
+                dataset_id: null,     // User creates per-page in Settings
                 webhook_subscribed: webhookSubscribed,
             };
 
