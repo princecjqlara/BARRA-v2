@@ -33,10 +33,10 @@ async function callNvidiaAPI(
     maxTokens: number = 2048,
     temperature: number = 0.7
 ): Promise<{ content: string; tokensUsed: number }> {
-    const apiKey = process.env.NVIDIA_NIM_API_KEY;
+    const apiKey = process.env.NVIDIA_API_KEY;
 
     if (!apiKey) {
-        throw new Error('NVIDIA_NIM_API_KEY is not set');
+        throw new Error('NVIDIA_API_KEY is not set');
     }
 
     const response = await fetch(`${NVIDIA_API_BASE}/chat/completions`, {

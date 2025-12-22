@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { NVIDIA_MODELS } from '@/lib/types';
 
 interface FacebookConfig {
@@ -28,24 +28,46 @@ export default function SettingsPage() {
 
 function SettingsContent() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const [facebookConfigs, setFacebookConfigs] = useState<FacebookConfig[]>([]);
     const [selectedModel, setSelectedModel] = useState('meta/llama-3.1-8b-instruct');
     const [loading, setLoading] = useState(true);
+    const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     useEffect(() => {
-        // Check for URL params
-        const success = searchParams.get('success');
-        const error = searchParams.get('error');
-
-        if (success === 'facebook_connected') {
-            setMessage({ type: 'success', text: 'Facebook Page connected successfully!' });
-        } else if (error) {
-            setMessage({ type: 'error', text: `Error: ${error.replace(/_/g, ' ')}` });
-        }
-
-        loadSettings();
+        checkAuthAndLoad();
     }, [searchParams]);
+
+    async function checkAuthAndLoad() {
+        try {
+            // Check authentication first
+            const authRes = await fetch('/api/auth/me');
+            const authData = await authRes.json();
+
+            if (!authData.authenticated) {
+                router.push('/login');
+                return;
+            }
+
+            setIsAuthenticated(true);
+
+            // Check for URL params
+            const success = searchParams.get('success');
+            const error = searchParams.get('error');
+
+            if (success === 'facebook_connected') {
+                setMessage({ type: 'success', text: 'Facebook Page connected successfully!' });
+            } else if (error) {
+                setMessage({ type: 'error', text: `Error: ${error.replace(/_/g, ' ')}` });
+            }
+
+            loadSettings();
+        } catch (err) {
+            console.error('Auth check failed:', err);
+            router.push('/login');
+        }
+    }
 
     async function loadSettings() {
         try {
@@ -62,12 +84,16 @@ function SettingsContent() {
         window.location.href = '/api/auth/facebook';
     }
 
-    if (loading) {
+    if (loading || isAuthenticated === null) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="spinner" />
             </div>
         );
+    }
+
+    if (!isAuthenticated) {
+        return null;
     }
 
     return (

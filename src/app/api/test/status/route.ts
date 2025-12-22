@@ -122,7 +122,7 @@ export async function GET() {
         }
 
         // Check 3: NVIDIA AI
-        const nvidiaKey = process.env.NVIDIA_NIM_API_KEY;
+        const nvidiaKey = process.env.NVIDIA_API_KEY;
         if (nvidiaKey && nvidiaKey !== 'placeholder') {
             checks.push({
                 name: 'AI Service (NVIDIA)',
@@ -134,7 +134,7 @@ export async function GET() {
                 name: 'AI Service (NVIDIA)',
                 status: 'warning',
                 details: 'API key not configured',
-                action: 'Add NVIDIA_NIM_API_KEY to environment',
+                action: 'Add NVIDIA_API_KEY to environment',
             });
         }
 

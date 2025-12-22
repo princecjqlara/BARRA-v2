@@ -197,7 +197,7 @@ async function analyzeConversationIntent(
     recommended_action: string;
     key_topics: string[];
 }> {
-    const NVIDIA_API_KEY = process.env.NVIDIA_NIM_API_KEY!;
+    const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY!;
     const NVIDIA_API_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
     const prompt = `Analyze this customer conversation and determine the appropriate action.
