@@ -92,6 +92,31 @@ function SettingsContent() {
         window.location.href = '/api/auth/facebook';
     }
 
+    async function disconnectFacebook(configId: string, pageName: string) {
+        if (!confirm(`Are you sure you want to disconnect "${pageName}"?`)) {
+            return;
+        }
+
+        setSaving(true);
+        try {
+            const res = await fetch(`/api/facebook-config/${configId}`, {
+                method: 'DELETE',
+            });
+
+            if (res.ok) {
+                setMessage({ type: 'success', text: `"${pageName}" disconnected successfully!` });
+                loadSettings(); // Refresh
+            } else {
+                const data = await res.json();
+                setMessage({ type: 'error', text: data.error || 'Failed to disconnect' });
+            }
+        } catch (error) {
+            console.error('Failed to disconnect:', error);
+            setMessage({ type: 'error', text: 'Failed to disconnect page' });
+        }
+        setSaving(false);
+    }
+
     async function saveAdAccount(configId: string) {
         setSaving(true);
         try {
@@ -270,6 +295,23 @@ function SettingsContent() {
                                                 </button>
                                             </div>
                                         )}
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="border-t border-slate-700 pt-4 mt-4 flex gap-2">
+                                        <button
+                                            onClick={connectFacebook}
+                                            className="btn-secondary text-sm flex-1"
+                                        >
+                                            🔄 Reconnect
+                                        </button>
+                                        <button
+                                            onClick={() => disconnectFacebook(config.id, config.page_name)}
+                                            disabled={saving}
+                                            className="text-red-400 text-sm hover:underline px-3"
+                                        >
+                                            Disconnect
+                                        </button>
                                     </div>
                                 </div>
                             ))}

@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClient, createServerClientWithCookies } from '@/lib/supabase/client';
 import { bulkAssignContacts, analyzeContact } from '@/lib/services/nvidiaAIService';
 import type { Contact, PipelineStage } from '@/lib/types';
 
 // POST /api/ai/analyze - Analyze contacts and optionally assign to stages
 export async function POST(request: NextRequest) {
+    const authClient = await createServerClientWithCookies();
     const supabase = createServerClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClient, createServerClientWithCookies } from '@/lib/supabase/client';
 import { suggestPipeline } from '@/lib/services/nvidiaAIService';
 import type { Contact } from '@/lib/types';
 
 // POST /api/ai/suggest-pipeline - Generate pipeline suggestion
 export async function POST(request: NextRequest) {
+    const authClient = await createServerClientWithCookies();
     const supabase = createServerClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
