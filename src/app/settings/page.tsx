@@ -9,6 +9,7 @@ interface FacebookConfig {
     id: string;
     page_id: string;
     page_name: string;
+    ad_account_id: string | null;
     dataset_id: string | null;
     webhook_subscribed: boolean;
     created_at: string;
@@ -34,6 +35,9 @@ function SettingsContent() {
     const [loading, setLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [editingAdAccount, setEditingAdAccount] = useState<string | null>(null);
+    const [adAccountInput, setAdAccountInput] = useState('');
+    const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         checkAuthAndLoad();
@@ -71,8 +75,12 @@ function SettingsContent() {
 
     async function loadSettings() {
         try {
-            // In a real app, you'd fetch this from the API
-            // For now, we'll use mock data
+            // Fetch Facebook configs
+            const res = await fetch('/api/facebook-config');
+            if (res.ok) {
+                const data = await res.json();
+                setFacebookConfigs(data.configs || []);
+            }
             setLoading(false);
         } catch (error) {
             console.error('Failed to load settings:', error);
@@ -82,6 +90,33 @@ function SettingsContent() {
 
     function connectFacebook() {
         window.location.href = '/api/auth/facebook';
+    }
+
+    async function saveAdAccount(configId: string) {
+        setSaving(true);
+        try {
+            const res = await fetch('/api/facebook-config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    config_id: configId,
+                    ad_account_id: adAccountInput.trim() || null,
+                }),
+            });
+
+            if (res.ok) {
+                setMessage({ type: 'success', text: 'Ad Account updated successfully!' });
+                setEditingAdAccount(null);
+                loadSettings(); // Refresh
+            } else {
+                const data = await res.json();
+                setMessage({ type: 'error', text: data.error || 'Failed to update' });
+            }
+        } catch (error) {
+            console.error('Failed to save ad account:', error);
+            setMessage({ type: 'error', text: 'Failed to save ad account' });
+        }
+        setSaving(false);
     }
 
     if (loading || isAuthenticated === null) {
@@ -137,6 +172,12 @@ function SettingsContent() {
                     : 'bg-red-500/20 border border-red-500/30 text-red-400'
                     }`}>
                     {message.text}
+                    <button
+                        onClick={() => setMessage(null)}
+                        className="ml-4 text-sm underline"
+                    >
+                        Dismiss
+                    </button>
                 </div>
             )}
 
@@ -176,7 +217,7 @@ function SettingsContent() {
                                         </span>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div className="grid grid-cols-2 gap-4 text-sm mb-4">
                                         <div>
                                             <p className="text-slate-500">Dataset ID</p>
                                             <p className="font-mono text-xs">{config.dataset_id || 'Not created'}</p>
@@ -186,6 +227,50 @@ function SettingsContent() {
                                             <p>{config.webhook_subscribed ? '✅ Subscribed' : '⏳ Not subscribed'}</p>
                                         </div>
                                     </div>
+
+                                    {/* Ad Account Section */}
+                                    <div className="border-t border-slate-700 pt-4">
+                                        <p className="text-slate-500 text-sm mb-2">Ad Account ID</p>
+                                        {editingAdAccount === config.id ? (
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    className="input-field flex-1"
+                                                    placeholder="e.g., 123456789 or act_123456789"
+                                                    value={adAccountInput}
+                                                    onChange={(e) => setAdAccountInput(e.target.value)}
+                                                />
+                                                <button
+                                                    onClick={() => saveAdAccount(config.id)}
+                                                    disabled={saving}
+                                                    className="btn-primary text-sm"
+                                                >
+                                                    {saving ? 'Saving...' : 'Save'}
+                                                </button>
+                                                <button
+                                                    onClick={() => setEditingAdAccount(null)}
+                                                    className="btn-secondary text-sm"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-mono text-sm">
+                                                    {config.ad_account_id || <span className="text-yellow-400">Not configured</span>}
+                                                </p>
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingAdAccount(config.id);
+                                                        setAdAccountInput(config.ad_account_id || '');
+                                                    }}
+                                                    className="text-indigo-400 text-sm hover:underline"
+                                                >
+                                                    {config.ad_account_id ? 'Edit' : 'Add'}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
 
@@ -194,6 +279,17 @@ function SettingsContent() {
                             </button>
                         </div>
                     )}
+
+                    {/* How to find Ad Account ID */}
+                    <div className="mt-6 p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/30">
+                        <h4 className="font-medium mb-2 text-indigo-300">💡 How to find your Ad Account ID</h4>
+                        <ol className="text-sm text-slate-400 space-y-1 list-decimal list-inside">
+                            <li>Go to <a href="https://business.facebook.com/settings/ad-accounts" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Facebook Business Settings</a></li>
+                            <li>Click on &quot;Ad accounts&quot; in the left menu</li>
+                            <li>Select your ad account</li>
+                            <li>Copy the Ad Account ID (numbers only, e.g., 123456789)</li>
+                        </ol>
+                    </div>
 
                     {/* Webhook URL Info */}
                     <div className="mt-6 p-4 rounded-xl bg-slate-800/30 border border-slate-700">
