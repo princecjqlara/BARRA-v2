@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClient, createServerClientWithCookies } from '@/lib/supabase/client';
 import {
     exchangeCodeForToken,
     getLongLivedToken,
@@ -57,12 +57,11 @@ export async function GET(request: NextRequest) {
         const selectedPage = pages[0];
         const selectedAdAccount = adAccounts[0];
 
-        // Get the current user from Supabase auth
+        // Get the current user from Supabase auth - use cookie-aware client
+        const authClient = await createServerClientWithCookies();
         const supabase = createServerClient();
 
-        // For demo, get user from the session cookie
-        // In production, you'd use proper auth middleware
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const { data: { user }, error: userError } = await authClient.auth.getUser();
 
         if (userError || !user) {
             // Store in session for after login
