@@ -144,6 +144,28 @@ function SettingsContent() {
         setSaving(false);
     }
 
+    async function createCapiDataset(configId: string) {
+        setSaving(true);
+        try {
+            const res = await fetch(`/api/facebook-config/${configId}/create-dataset`, {
+                method: 'POST',
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                setMessage({ type: 'success', text: `CAPI Dataset created! ID: ${data.dataset_id}` });
+                loadSettings(); // Refresh to show new dataset ID
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to create dataset' });
+            }
+        } catch (error) {
+            console.error('Failed to create CAPI dataset:', error);
+            setMessage({ type: 'error', text: 'Failed to create CAPI dataset' });
+        }
+        setSaving(false);
+    }
+
     if (loading || isAuthenticated === null) {
         return (
             <div className="min-h-screen flex items-center justify-center">
@@ -245,7 +267,18 @@ function SettingsContent() {
                                     <div className="grid grid-cols-2 gap-4 text-sm mb-4">
                                         <div>
                                             <p className="text-slate-500">Dataset ID</p>
-                                            <p className="font-mono text-xs">{config.dataset_id || 'Not created'}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-mono text-xs">{config.dataset_id || 'Not created'}</p>
+                                                {!config.dataset_id && config.ad_account_id && (
+                                                    <button
+                                                        onClick={() => createCapiDataset(config.id)}
+                                                        disabled={saving}
+                                                        className="text-indigo-400 text-xs hover:underline"
+                                                    >
+                                                        Create
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                         <div>
                                             <p className="text-slate-500">Webhook</p>
