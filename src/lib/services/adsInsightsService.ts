@@ -3,7 +3,7 @@
  * Fetches ad performance metrics: CTR, CPM, CPC, impressions, spend, etc.
  */
 
-const GRAPH_API_VERSION = 'v18.0';
+const GRAPH_API_VERSION = 'v21.0';
 const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 
 export interface AdInsight {
