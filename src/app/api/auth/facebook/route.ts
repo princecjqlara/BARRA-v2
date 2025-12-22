@@ -3,7 +3,7 @@ import { getFacebookOAuthUrl } from '@/lib/services/facebookService';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(request: NextRequest) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const redirectUri = `${appUrl}/api/auth/facebook/callback`;
 
     // Generate state for CSRF protection
