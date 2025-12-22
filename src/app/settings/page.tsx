@@ -38,6 +38,7 @@ function SettingsContent() {
     const [editingAdAccount, setEditingAdAccount] = useState<string | null>(null);
     const [adAccountInput, setAdAccountInput] = useState('');
     const [saving, setSaving] = useState(false);
+    const [creatingDatasetFor, setCreatingDatasetFor] = useState<string | null>(null);
 
     useEffect(() => {
         checkAuthAndLoad();
@@ -145,7 +146,7 @@ function SettingsContent() {
     }
 
     async function createCapiDataset(configId: string) {
-        setSaving(true);
+        setCreatingDatasetFor(configId);
         try {
             const res = await fetch(`/api/facebook-config/${configId}/create-dataset`, {
                 method: 'POST',
@@ -155,15 +156,15 @@ function SettingsContent() {
 
             if (res.ok) {
                 setMessage({ type: 'success', text: `CAPI Dataset created! ID: ${data.dataset_id}` });
-                loadSettings(); // Refresh to show new dataset ID
+                await loadSettings(); // Refresh to show new dataset ID
             } else {
-                setMessage({ type: 'error', text: data.error || 'Failed to create dataset' });
+                setMessage({ type: 'error', text: data.error || data.details || 'Failed to create dataset' });
             }
         } catch (error) {
             console.error('Failed to create CAPI dataset:', error);
-            setMessage({ type: 'error', text: 'Failed to create CAPI dataset' });
+            setMessage({ type: 'error', text: 'Failed to create CAPI dataset. Check console for details.' });
         }
-        setSaving(false);
+        setCreatingDatasetFor(null);
     }
 
     if (loading || isAuthenticated === null) {
@@ -272,10 +273,10 @@ function SettingsContent() {
                                                 {!config.dataset_id && config.ad_account_id && (
                                                     <button
                                                         onClick={() => createCapiDataset(config.id)}
-                                                        disabled={saving}
+                                                        disabled={creatingDatasetFor === config.id}
                                                         className="bg-indigo-500 hover:bg-indigo-600 text-white text-xs px-2 py-1 rounded disabled:opacity-50"
                                                     >
-                                                        {saving ? 'Creating...' : '+ Create'}
+                                                        {creatingDatasetFor === config.id ? '⏳ Creating...' : '+ Create'}
                                                     </button>
                                                 )}
                                             </div>
