@@ -273,9 +273,9 @@ function SettingsContent() {
                                                     <button
                                                         onClick={() => createCapiDataset(config.id)}
                                                         disabled={saving}
-                                                        className="text-indigo-400 text-xs hover:underline"
+                                                        className="bg-indigo-500 hover:bg-indigo-600 text-white text-xs px-2 py-1 rounded disabled:opacity-50"
                                                     >
-                                                        Create
+                                                        {saving ? 'Creating...' : '+ Create'}
                                                     </button>
                                                 )}
                                             </div>
