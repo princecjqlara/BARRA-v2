@@ -64,6 +64,16 @@ export default function AdsPage() {
 
             if (campaignsData.error) {
                 setError(campaignsData.error);
+                setCampaigns([]);
+                setAds([]);
+                return;
+            }
+
+            if (adsData.error) {
+                // Still show campaigns even if ads fail
+                setCampaigns(campaignsData.insights || []);
+                setAds([]);
+                setCached(campaignsData.cached || false);
                 return;
             }
 
@@ -72,7 +82,9 @@ export default function AdsPage() {
             setCached(campaignsData.cached || false);
         } catch (err) {
             console.error('Failed to load insights:', err);
-            setError('Failed to load ad insights');
+            setError('Failed to load ad insights. Please check your connection.');
+            setCampaigns([]);
+            setAds([]);
         } finally {
             setLoading(false);
         }
