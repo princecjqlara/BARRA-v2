@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClientWithCookies } from '@/lib/supabase/client';
 import { ADMIN_EMAIL } from '@/lib/adminConfig';
 
 /**
  * GET /api/auth/me - Get current user info including admin status
  */
 export async function GET() {
-    const supabase = createServerClient();
+    const supabase = await createServerClientWithCookies();
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
