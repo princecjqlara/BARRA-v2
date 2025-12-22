@@ -22,19 +22,38 @@ export async function GET(request: NextRequest) {
     const datePreset = searchParams.get('date_preset') || 'last_30d';
 
     try {
-        // Get user's Facebook config
-        const { data: fbConfig, error: configError } = await supabase
+        // Get user's Facebook configs with ad accounts
+        const { data: fbConfigs, error: configError } = await supabase
             .from('facebook_configs')
             .select('*')
-            .eq('user_id', user.id)
-            .not('ad_account_id', 'is', null)
-            .single();
+            .eq('user_id', user.id);
 
-        if (configError || !fbConfig?.ad_account_id) {
+        if (configError) {
+            console.error('Failed to fetch facebook configs:', configError);
             return NextResponse.json({
-                error: 'No ad account connected. Please connect your Facebook account first.'
+                error: 'Failed to fetch Facebook configuration'
+            }, { status: 500 });
+        }
+
+        // Check if user has any facebook config at all
+        if (!fbConfigs || fbConfigs.length === 0) {
+            return NextResponse.json({
+                error: 'No Facebook page connected. Go to Settings to connect your Facebook account.',
+                action: 'connect_facebook'
             }, { status: 400 });
         }
+
+        // Check if any config has an ad account
+        const configWithAdAccount = fbConfigs.find(c => c.ad_account_id);
+
+        if (!configWithAdAccount) {
+            return NextResponse.json({
+                error: 'No Ad Account ID configured. Go to Settings and add your Ad Account ID to your connected Facebook page.',
+                action: 'add_ad_account'
+            }, { status: 400 });
+        }
+
+        const fbConfig = configWithAdAccount;
 
         // Check if we have cached data
         const { data: cachedMetrics } = await supabase
@@ -132,17 +151,18 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const datePreset = body.date_preset || 'last_30d';
 
-        // Get user's Facebook config
-        const { data: fbConfig, error: configError } = await supabase
+        // Get user's Facebook configs
+        const { data: fbConfigs } = await supabase
             .from('facebook_configs')
             .select('*')
-            .eq('user_id', user.id)
-            .not('ad_account_id', 'is', null)
-            .single();
+            .eq('user_id', user.id);
 
-        if (configError || !fbConfig?.ad_account_id) {
+        // Find one with an ad account
+        const fbConfig = fbConfigs?.find(c => c.ad_account_id);
+
+        if (!fbConfig) {
             return NextResponse.json({
-                error: 'No ad account connected'
+                error: 'No ad account connected. Go to Settings and add your Ad Account ID.'
             }, { status: 400 });
         }
 
