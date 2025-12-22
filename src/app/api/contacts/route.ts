@@ -116,3 +116,44 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
 }
+
+// DELETE /api/contacts - Delete contacts
+export async function DELETE(request: NextRequest) {
+    const authClient = await createServerClientWithCookies();
+    const supabase = createServerClient();
+
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    if (authError || !user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    try {
+        const body = await request.json();
+        const contactIds = body.contact_ids;
+
+        if (!contactIds || !Array.isArray(contactIds) || contactIds.length === 0) {
+            return NextResponse.json({ error: 'contact_ids array is required' }, { status: 400 });
+        }
+
+        // Delete contacts (only those owned by user)
+        const { error } = await supabase
+            .from('contacts')
+            .delete()
+            .eq('user_id', user.id)
+            .in('id', contactIds);
+
+        if (error) {
+            console.error('Failed to delete contacts:', error);
+            return NextResponse.json({ error: 'Failed to delete contacts' }, { status: 500 });
+        }
+
+        return NextResponse.json({
+            success: true,
+            message: `Deleted ${contactIds.length} contact(s)`
+        });
+    } catch (err) {
+        console.error('Invalid request body:', err);
+        return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+}
+

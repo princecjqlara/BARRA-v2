@@ -152,7 +152,7 @@ Respond with this exact JSON structure:
 }
 
 /**
- * Suggest a pipeline structure based on contacts
+ * Suggest a single pipeline structure based on contacts
  */
 export async function suggestPipeline(
     contacts: Contact[],
@@ -162,7 +162,7 @@ export async function suggestPipeline(
     suggestion: PipelineSuggestion;
     tokensUsed: number;
 }> {
-    const contactSummary = contacts.slice(0, 20).map((c, i) => {
+    const contactSummary = contacts.slice(0, 50).map((c, i) => {
         const analysis = c.ai_analysis;
         return `${i + 1}. ${c.full_name || c.email || 'Unknown'} - ${analysis?.summary || 'Not analyzed'} [${analysis?.urgency || 'unknown'} urgency]`;
     }).join('\n');
@@ -173,10 +173,10 @@ Always respond in valid JSON format only.`;
 
     const userPrompt = `Based on these contacts/leads, suggest a pipeline structure:
 
-CONTACTS (${contacts.length} total, showing up to 20):
+CONTACTS (${contacts.length} total, showing up to 50):
 ${contactSummary}
 
-${businessContext ? `BUSINESS CONTEXT: ${businessContext}` : ''}
+${businessContext ? `BUSINESS CONTEXT/GOAL: ${businessContext}` : ''}
 
 Respond with this exact JSON structure:
 {
@@ -245,6 +245,141 @@ Use 4-6 stages typically. Use distinct, visually appealing colors.`;
                 ],
                 reasoning: 'Default pipeline structure for general sales processes',
             },
+            tokensUsed: result.tokensUsed,
+        };
+    }
+}
+
+/**
+ * Suggest multiple pipeline variations based on contacts and business goal
+ * Analyzes up to 200 contacts and generates 3-4 distinct pipeline options
+ */
+export async function suggestMultiplePipelines(
+    contacts: Contact[],
+    businessGoal: string,
+    model: string = 'meta/llama-3.1-8b-instruct'
+): Promise<{
+    suggestions: PipelineSuggestion[];
+    tokensUsed: number;
+}> {
+    // Analyze up to 200 contacts
+    const analyzedContacts = contacts.slice(0, 200);
+
+    const contactSummary = analyzedContacts.slice(0, 100).map((c, i) => {
+        const analysis = c.ai_analysis;
+        return `${i + 1}. ${c.full_name || c.email || 'Unknown'} - ${analysis?.summary || 'Not analyzed'} [Intent: ${analysis?.intent || 'unknown'}]`;
+    }).join('\n');
+
+    // Count intent/urgency patterns
+    const intentCounts: Record<string, number> = {};
+    const urgencyCounts = { low: 0, medium: 0, high: 0 };
+    analyzedContacts.forEach(c => {
+        const intent = c.ai_analysis?.intent || 'unknown';
+        intentCounts[intent] = (intentCounts[intent] || 0) + 1;
+        const urgency = c.ai_analysis?.urgency || 'medium';
+        if (urgency in urgencyCounts) urgencyCounts[urgency as keyof typeof urgencyCounts]++;
+    });
+
+    const patternSummary = `Intent patterns: ${JSON.stringify(intentCounts)}
+Urgency distribution: Low: ${urgencyCounts.low}, Medium: ${urgencyCounts.medium}, High: ${urgencyCounts.high}`;
+
+    const systemPrompt = `You are an expert sales pipeline designer. Based on the leads data and business goal, create 3-4 DISTINCTLY DIFFERENT pipeline options.
+Each pipeline should serve a different strategy or purpose.
+Always respond in valid JSON format only.`;
+
+    const userPrompt = `Create 3-4 different pipeline variations for this business:
+
+BUSINESS GOAL: ${businessGoal}
+
+CONTACT ANALYSIS (${analyzedContacts.length} total contacts):
+${patternSummary}
+
+SAMPLE CONTACTS:
+${contactSummary}
+
+Generate 3-4 DISTINCTLY DIFFERENT pipelines. Examples of different purposes:
+1. Lead Magnet Pipeline - For nurturing leads who downloaded a freebie
+2. Appointment Setting Pipeline - For booking calls/demos
+3. Direct Sales Pipeline - For leads ready to buy
+4. Long-term Nurture Pipeline - For leads needing education
+
+Each pipeline must be unique and serve a different strategy!
+
+Respond with this exact JSON structure:
+{
+  "pipelines": [
+    {
+      "name": "Pipeline Name",
+      "description": "What this pipeline is best for",
+      "purpose": "lead_magnet | appointment | sales | nurture | custom",
+      "stages": [
+        {
+          "name": "Stage Name",
+          "description": "What this stage represents",
+          "order_index": 0,
+          "color": "#hexcolor",
+          "requirements": { "criteria": ["criteria1"] },
+          "capi_event_name": "Lead"
+        }
+      ],
+      "reasoning": "Why this pipeline works for the goal",
+      "best_for": "What type of leads this is ideal for"
+    }
+  ]
+}
+
+CAPI events: Lead, Contact, CompleteRegistration, Schedule, InitiateCheckout, Purchase
+Use 4-6 stages per pipeline. Use distinct colors. Make each pipeline TRULY DIFFERENT.`;
+
+    const result = await callNvidiaAPI(model, [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+    ], 6000, 0.8); // Higher temperature for more variety
+
+    try {
+        let jsonContent = result.content;
+        const jsonMatch = jsonContent.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (jsonMatch) {
+            jsonContent = jsonMatch[1];
+        }
+
+        const parsed = JSON.parse(jsonContent.trim());
+        const pipelines = parsed.pipelines || [];
+
+        return {
+            suggestions: pipelines.map((p: PipelineSuggestion & { purpose?: string; best_for?: string }) => ({
+                name: p.name || 'Pipeline',
+                description: p.description || '',
+                purpose: p.purpose || 'custom',
+                stages: (p.stages || []).map((s: { name?: string; description?: string; order_index?: number; color?: string; requirements?: { criteria: string[] }; capi_event_name?: string }, i: number) => ({
+                    name: s.name || `Stage ${i + 1}`,
+                    description: s.description || '',
+                    order_index: s.order_index ?? i,
+                    color: s.color || '#6366f1',
+                    requirements: s.requirements || { criteria: [] },
+                    capi_event_name: s.capi_event_name,
+                })),
+                reasoning: p.reasoning || '',
+                best_for: p.best_for || '',
+            })),
+            tokensUsed: result.tokensUsed,
+        };
+    } catch {
+        console.error('Failed to parse multiple pipelines:', result.content);
+        // Return single default
+        return {
+            suggestions: [{
+                name: 'Default Sales Pipeline',
+                description: 'A standard sales pipeline for ' + businessGoal,
+                stages: [
+                    { name: 'New Lead', description: 'Newly acquired leads', order_index: 0, color: '#3b82f6', requirements: { criteria: ['Just received'] }, capi_event_name: 'Lead' },
+                    { name: 'Contacted', description: 'Initial contact made', order_index: 1, color: '#8b5cf6', requirements: { criteria: ['Responded'] }, capi_event_name: 'Contact' },
+                    { name: 'Qualified', description: 'Qualified as potential', order_index: 2, color: '#f59e0b', requirements: { criteria: ['Confirmed interest'] } },
+                    { name: 'Proposal', description: 'Proposal sent', order_index: 3, color: '#10b981', requirements: { criteria: ['Received proposal'] } },
+                    { name: 'Closed', description: 'Deal closed', order_index: 4, color: '#22c55e', requirements: { criteria: ['Payment received'] }, capi_event_name: 'Purchase' },
+                ],
+                reasoning: 'Default pipeline structure',
+            }],
             tokensUsed: result.tokensUsed,
         };
     }
