@@ -107,24 +107,87 @@ export async function getUserPages(accessToken: string): Promise<{
 }
 
 /**
- * Get user's Ad Accounts
+ * Get user's Ad Accounts (both personal and Business Manager accounts)
  */
 export async function getAdAccounts(accessToken: string): Promise<{
     id: string;
     name: string;
     account_id: string;
 }[]> {
-    const response = await fetch(
-        `${GRAPH_API_BASE}/me/adaccounts?fields=id,name,account_id&access_token=${accessToken}`
-    );
+    const allAdAccounts: { id: string; name: string; account_id: string }[] = [];
 
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Failed to get ad accounts: ${JSON.stringify(error)}`);
+    // 1. Try getting personal ad accounts first
+    try {
+        const personalResponse = await fetch(
+            `${GRAPH_API_BASE}/me/adaccounts?fields=id,name,account_id&access_token=${accessToken}`
+        );
+
+        if (personalResponse.ok) {
+            const personalData = await personalResponse.json();
+            if (personalData.data) {
+                allAdAccounts.push(...personalData.data);
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching personal ad accounts:', error);
     }
 
-    const data = await response.json();
-    return data.data || [];
+    // 2. Try getting Business Manager ad accounts
+    try {
+        // First, get user's businesses
+        const businessesResponse = await fetch(
+            `${GRAPH_API_BASE}/me/businesses?fields=id,name&access_token=${accessToken}`
+        );
+
+        if (businessesResponse.ok) {
+            const businessesData = await businessesResponse.json();
+            const businesses = businessesData.data || [];
+
+            // For each business, get its owned ad accounts
+            for (const business of businesses) {
+                try {
+                    const ownedAccountsResponse = await fetch(
+                        `${GRAPH_API_BASE}/${business.id}/owned_ad_accounts?fields=id,name,account_id&access_token=${accessToken}`
+                    );
+
+                    if (ownedAccountsResponse.ok) {
+                        const ownedData = await ownedAccountsResponse.json();
+                        if (ownedData.data) {
+                            // Add business ad accounts, avoiding duplicates
+                            for (const account of ownedData.data) {
+                                if (!allAdAccounts.some(a => a.id === account.id)) {
+                                    allAdAccounts.push(account);
+                                }
+                            }
+                        }
+                    }
+
+                    // Also try client ad accounts
+                    const clientAccountsResponse = await fetch(
+                        `${GRAPH_API_BASE}/${business.id}/client_ad_accounts?fields=id,name,account_id&access_token=${accessToken}`
+                    );
+
+                    if (clientAccountsResponse.ok) {
+                        const clientData = await clientAccountsResponse.json();
+                        if (clientData.data) {
+                            for (const account of clientData.data) {
+                                if (!allAdAccounts.some(a => a.id === account.id)) {
+                                    allAdAccounts.push(account);
+                                }
+                            }
+                        }
+                    }
+                } catch (businessError) {
+                    console.error(`Error fetching ad accounts for business ${business.id}:`, businessError);
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching business ad accounts:', error);
+    }
+
+    console.log(`Found ${allAdAccounts.length} total ad accounts`);
+    return allAdAccounts;
 }
 
 /**
