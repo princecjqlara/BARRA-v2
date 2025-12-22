@@ -33,6 +33,7 @@ export default function Dashboard() {
   const [recentContacts, setRecentContacts] = useState<RecentContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     checkAuthAndLoad();
@@ -51,6 +52,7 @@ export default function Dashboard() {
       }
 
       setIsAuthenticated(true);
+      setIsAdmin(authData.isAdmin || false);
       loadDashboardData();
     } catch (err) {
       console.error('Auth check failed:', err);
@@ -125,9 +127,11 @@ export default function Dashboard() {
         <Link href="/ads" className="btn-secondary">
           Ads
         </Link>
-        <Link href="/tenants" className="btn-secondary">
-          Tenants
-        </Link>
+        {isAdmin && (
+          <Link href="/tenants" className="btn-secondary">
+            Tenants
+          </Link>
+        )}
         <Link href="/settings" className="btn-secondary">
           Settings
         </Link>
