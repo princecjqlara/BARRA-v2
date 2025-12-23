@@ -55,12 +55,19 @@ export async function GET(request: NextRequest) {
 
         const fbConfig = configWithAdAccount;
 
-        // Check if we have cached data
-        const { data: cachedMetrics } = await supabase
-            .from('campaign_metrics')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('last_synced_at', { ascending: false });
+        // Check if we have cached data (safely - table may not exist)
+        let cachedMetrics = null;
+        try {
+            const { data } = await supabase
+                .from('campaign_metrics')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('last_synced_at', { ascending: false });
+            cachedMetrics = data;
+        } catch {
+            // Table may not exist, skip cache
+            console.log('campaign_metrics table may not exist, skipping cache');
+        }
 
         // If cache is less than 15 minutes old, return cached data
         const cacheAge = cachedMetrics?.[0]?.last_synced_at
