@@ -30,7 +30,7 @@ export async function GET() {
     }
 }
 
-// PUT /api/facebook-config - Update Facebook configuration (ad account, etc.)
+// PUT /api/facebook-config - Update Facebook configuration (ad account, CAPI token, etc.)
 export async function PUT(request: NextRequest) {
     const authClient = await createServerClientWithCookies();
     const supabase = createServerClient();
@@ -42,18 +42,29 @@ export async function PUT(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const { config_id, ad_account_id } = body;
+        const { config_id, ad_account_id, capi_access_token } = body;
 
         if (!config_id) {
             return NextResponse.json({ error: 'config_id is required' }, { status: 400 });
         }
 
+        // Build update object - only include fields that were provided
+        const updateData: Record<string, string | null> = {};
+        if (ad_account_id !== undefined) {
+            updateData.ad_account_id = ad_account_id || null;
+        }
+        if (capi_access_token !== undefined) {
+            updateData.capi_access_token = capi_access_token || null;
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+        }
+
         // Update the config
         const { data: config, error } = await supabase
             .from('facebook_configs')
-            .update({
-                ad_account_id: ad_account_id || null,
-            })
+            .update(updateData)
             .eq('id', config_id)
             .eq('user_id', user.id) // Security: only update own configs
             .select()
@@ -67,7 +78,7 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({
             success: true,
             config,
-            message: 'Ad account updated successfully',
+            message: 'Configuration updated successfully',
         });
     } catch (error) {
         console.error('Failed to update facebook config:', error);

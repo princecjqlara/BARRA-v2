@@ -46,10 +46,13 @@ export async function POST(request: NextRequest) {
             externalId: `test-${uuidv4()}`,
         };
 
+        // Use CAPI access token if available, otherwise fallback to page token
+        const accessToken = fbConfig.capi_access_token || fbConfig.page_access_token;
+
         // Send test event to Facebook CAPI
         const result = await sendConversionEvent(
             fbConfig.dataset_id,
-            fbConfig.page_access_token,
+            accessToken,
             eventName,
             testUserData,
             {

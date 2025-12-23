@@ -13,6 +13,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- PART 1: CORE TABLES
 -- ============================================================================
 
+
 -- 1.1 Facebook Configurations (per-user)
 CREATE TABLE IF NOT EXISTS facebook_configs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -22,6 +23,7 @@ CREATE TABLE IF NOT EXISTS facebook_configs (
   page_access_token TEXT NOT NULL,
   ad_account_id TEXT,
   dataset_id TEXT,
+  capi_access_token TEXT,  -- Dedicated CAPI access token from Facebook Events Manager
   webhook_subscribed BOOLEAN DEFAULT false,
   tenant_id UUID,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

@@ -11,6 +11,7 @@ interface FacebookConfig {
     page_name: string;
     ad_account_id: string | null;
     dataset_id: string | null;
+    capi_access_token: string | null;
     webhook_subscribed: boolean;
     created_at: string;
 }
@@ -37,6 +38,8 @@ function SettingsContent() {
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [editingAdAccount, setEditingAdAccount] = useState<string | null>(null);
     const [adAccountInput, setAdAccountInput] = useState('');
+    const [editingCapiToken, setEditingCapiToken] = useState<string | null>(null);
+    const [capiTokenInput, setCapiTokenInput] = useState('');
     const [saving, setSaving] = useState(false);
     const [creatingDatasetFor, setCreatingDatasetFor] = useState<string | null>(null);
 
@@ -141,6 +144,33 @@ function SettingsContent() {
         } catch (error) {
             console.error('Failed to save ad account:', error);
             setMessage({ type: 'error', text: 'Failed to save ad account' });
+        }
+        setSaving(false);
+    }
+
+    async function saveCapiToken(configId: string) {
+        setSaving(true);
+        try {
+            const res = await fetch('/api/facebook-config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    config_id: configId,
+                    capi_access_token: capiTokenInput.trim() || null,
+                }),
+            });
+
+            if (res.ok) {
+                setMessage({ type: 'success', text: 'CAPI Access Token updated successfully!' });
+                setEditingCapiToken(null);
+                loadSettings(); // Refresh
+            } else {
+                const data = await res.json();
+                setMessage({ type: 'error', text: data.error || 'Failed to update' });
+            }
+        } catch (error) {
+            console.error('Failed to save CAPI token:', error);
+            setMessage({ type: 'error', text: 'Failed to save CAPI token' });
         }
         setSaving(false);
     }
@@ -326,6 +356,52 @@ function SettingsContent() {
                                                     className="text-indigo-400 text-sm hover:underline"
                                                 >
                                                     {config.ad_account_id ? 'Edit' : 'Add'}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* CAPI Access Token Section */}
+                                    <div className="border-t border-slate-700 pt-4">
+                                        <p className="text-slate-500 text-sm mb-2">CAPI Access Token</p>
+                                        {editingCapiToken === config.id ? (
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="password"
+                                                    className="input-field flex-1"
+                                                    placeholder="Paste token from Facebook Events Manager"
+                                                    value={capiTokenInput}
+                                                    onChange={(e) => setCapiTokenInput(e.target.value)}
+                                                />
+                                                <button
+                                                    onClick={() => saveCapiToken(config.id)}
+                                                    disabled={saving}
+                                                    className="btn-primary text-sm"
+                                                >
+                                                    {saving ? 'Saving...' : 'Save'}
+                                                </button>
+                                                <button
+                                                    onClick={() => setEditingCapiToken(null)}
+                                                    className="btn-secondary text-sm"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-mono text-sm">
+                                                    {config.capi_access_token
+                                                        ? `${config.capi_access_token.substring(0, 20)}...`
+                                                        : <span className="text-yellow-400">Not configured</span>}
+                                                </p>
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingCapiToken(config.id);
+                                                        setCapiTokenInput(config.capi_access_token || '');
+                                                    }}
+                                                    className="text-indigo-400 text-sm hover:underline"
+                                                >
+                                                    {config.capi_access_token ? 'Edit' : 'Add'}
                                                 </button>
                                             </div>
                                         )}
