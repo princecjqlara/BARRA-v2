@@ -390,9 +390,9 @@ function SettingsContent() {
                                         ) : (
                                             <div className="flex items-center gap-2">
                                                 <p className="font-mono text-sm">
-                                                    {config.capi_access_token
+                                                    {(config.capi_access_token && config.capi_access_token.length > 20)
                                                         ? `${config.capi_access_token.substring(0, 20)}...`
-                                                        : <span className="text-yellow-400">Not configured</span>}
+                                                        : config.capi_access_token || <span className="text-yellow-400">Not configured</span>}
                                                 </p>
                                                 <button
                                                     onClick={() => {
