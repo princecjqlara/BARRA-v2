@@ -18,11 +18,19 @@ export function hashUserData(value: string): string {
 export function getFacebookOAuthUrl(redirectUri: string, state: string): string {
     const appId = process.env.FACEBOOK_APP_ID!;
     const scopes = [
+        // Page permissions
         'pages_manage_metadata',
         'pages_read_engagement',
+        'pages_read_user_content',
+        'pages_show_list',
+        'pages_messaging',      // Required for Messenger
+        'pages_manage_ads',     // Required for reading ads via page
+        // Leads
         'leads_retrieval',
+        // Ads Management
         'ads_management',
         'ads_read',
+        // Business
         'business_management',
     ].join(',');
 

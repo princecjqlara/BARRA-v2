@@ -418,9 +418,9 @@ function SettingsContent() {
                                         <button
                                             onClick={() => disconnectFacebook(config.id, config.page_name)}
                                             disabled={saving}
-                                            className="text-red-400 text-sm hover:underline px-3"
+                                            className="bg-red-500/20 hover:bg-red-500/40 text-red-400 text-sm px-4 py-2 rounded border border-red-500/30 disabled:opacity-50"
                                         >
-                                            Disconnect
+                                            🗑️ Delete
                                         </button>
                                     </div>
                                 </div>
